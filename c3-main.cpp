@@ -118,7 +118,7 @@ Eigen::Matrix4d ICP(PointCloudT::Ptr target, PointCloudT::Ptr source, Pose start
 	pcl::console::TicToc time;
   	time.tic ();
   	pcl::IterativeClosestPoint<PointT, PointT> icp;
-  	int iterations = 50;
+  	int iterations = 8;
   	icp.setMaximumIterations (iterations);
   	icp.setInputSource (transformSource);
   	icp.setInputTarget (target);
@@ -257,26 +257,42 @@ int main(){
 		if(!new_scan){
 			
 			new_scan = true;
-				pcl::VoxelGrid<PointT> vg;
+			
+			// To Do Step One. Filter scan using voxel filter
+		
+			// Init an instance of Voxwl Grid
+			pcl::VoxelGrid<PointT> vg;
+			// set inut 
             vg.setInputCloud(scanCloud);
+			// Define resolution
             double filterRes = 0.5;
             vg.setLeafSize(filterRes, filterRes, filterRes);
+			// create an instance of filtered cloud
             typename pcl::PointCloud<PointT>::Ptr cloudFiltered (new pcl::PointCloud<PointT>);
+			// implmenet the fiter cloud 
             vg.filter(*cloudFiltered);
 
 			// TODO: Find pose transform by using ICP or NDT matching
-          	std::cout <<" Pose beforee " << pose.position .x << pose.position.y << std::endl;
-          	Eigen::Matrix4d ICP_transform = ICP(mapCloud, cloudFiltered, pose);
+          	//std::cout <<" Pose beforee " << pose.position .x << pose.position.y << std::endl;
+          
+          	// Transform from pose coordinate to vehicle coordinate 
+			pose = Pose(Point(vehicle->GetTransform().location.x, vehicle->GetTransform().location.y, vehicle->GetTransform().location.z), Rotate(vehicle->GetTransform().rotation.yaw * pi/180, vehicle->GetTransform().rotation.pitch *             pi/180, vehicle->GetTransform().rotation.roll * pi/180)) - poseRef;
+          	// Execute the ICP function to determine the transformation between the target (MAP) and the source cloud
+			Eigen::Matrix4d ICP_transform = ICP(mapCloud, cloudFiltered, pose);
 			//pose = ....
-          	pose = getPose(ICP_transform);
+          	// Set the pose based on the ICP transformation output
+			pose = getPose(ICP_transform);
 			
-          	std::cout <<" Pose after " << pose.position .x << pose.position.y << std::endl;
+          	//std::cout <<" Pose after " << pose.position .x << pose.position.y << std::endl;
 			// TODO: Transform scan so it aligns with ego's actual pose and render that scan
+			// Crerate an instance of the transformed cloud
             PointCloudT::Ptr transformed_scan (new PointCloudT);  
+			// Transform the source cloud filtered and set it to transform_scan using the ICP transformation output
             pcl::transformPointCloud(*cloudFiltered, *transformed_scan, ICP_transform);
 
 			viewer->removePointCloud("scan");
 			// TODO: Change `scanCloud` below to your transformed scan
+			// View and render the transformed scan
 			renderPointCloud(viewer, transformed_scan, "scan", Color(1,0,0) );
 
 			viewer->removeAllShapes();
